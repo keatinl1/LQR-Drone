@@ -18,31 +18,6 @@ logging.basicConfig(level=logging.ERROR)
 URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 DEFAULT_HEIGHT = 0.5
 
-class PathPlanner:
-    '''decide which height to aim for next'''
-    def __init__(self, z_pos):
-        self.z_pos = z_pos
-        self.look_ahead_radius = 0.05
-        self.waypoints = np.zeros([100])
-        self.goal = 0
-
-        self.get_waypoints()
-
-    def get_waypoints(self):
-        '''get waypoints from csv'''
-        self.waypoints = genfromtxt('ref-traj.csv', delimiter=',')
-        self.find_closest_next_waypoint()
-
-    def find_closest_next_waypoint(self):
-        '''find closest next waypoint from imported csv'''
-        dist = (self.waypoints - self.z_pos)**2
-        i_closest_wp = np.argmin(dist)
-        next_wp = self.waypoints[i_closest_wp + 1]
-        self.goal = next_wp
-        # dist_to_next = np.sqrt(next_wp - self.z_pos)**2
-        # t_val = self.look_ahead_radius / dist_to_next
-        # self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
-
 class KalmanFilter():
     '''filter the data from z-ranger'''
     def __init__(self):
@@ -68,6 +43,31 @@ class KalmanFilter():
         self.P = (np.eye(self.A.shape[1]) - K @ self.H) @ P_pred
 
         return self.x
+
+class PathPlanner:
+    '''decide which height to aim for next'''
+    def __init__(self, z_pos):
+        self.z_pos = z_pos
+        self.look_ahead_radius = 0.05
+        self.waypoints = np.zeros([100])
+        self.goal = 0
+
+        self.get_waypoints()
+
+    def get_waypoints(self):
+        '''get waypoints from csv'''
+        self.waypoints = genfromtxt('ref-traj.csv', delimiter=',')
+        self.find_closest_next_waypoint()
+
+    def find_closest_next_waypoint(self):
+        '''find closest next waypoint from imported csv'''
+        dist = (self.waypoints - self.z_pos)**2
+        i_closest_wp = np.argmin(dist)
+        next_wp = self.waypoints[i_closest_wp + 1]
+        self.goal = next_wp
+        # dist_to_next = np.sqrt(next_wp - self.z_pos)**2
+        # t_val = self.look_ahead_radius / dist_to_next
+        # self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
 
 class LQRController:
     '''controller class'''
@@ -118,13 +118,16 @@ def main(scf):
 
         while time.time() < endtime:
 
+            # State Estimate
             raw_z = Z
             z_pos = KalmanFilter().update(raw_z)
             print(f'current alt is: {z_pos}')
 
+            # Path Plan (Tracking)
             z_goal = PathPlanner(z_pos).goal
             print(f'goal alt is: {z_goal}')
 
+            # Control
             actuation = LQRController(z_pos, z_goal)
             print(f'velocity actuation is: {actuation.z_vel}')
 
