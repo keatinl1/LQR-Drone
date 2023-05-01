@@ -27,20 +27,20 @@ class KalmanFilter():
         self.Q = np.array([[0.01]])     # Process noise covariance
         self.R = np.array([[0.0025]])   # Measurement noise covariance
         self.P = np.array([[0.04]])     # Initial state covariance
-        self.z = 0                      # Initial state estimate
+        self.x = 0                      # Initial state estimate
 
     def update(self, x, u):
         # Prediction step
-        x_pred = self.A @ self.x + self.B * u
-        P_pred = self.A @ self.P @ self.A.T + self.Q
+        x_pred = self.A * self.x + self.B * u
+        P_pred = self.A * self.P * self.A.T + self.Q
 
         # Update step
-        innovation = z - self.H @ x_pred
-        S = self.H @ P_pred @ self.H.T + self.R
-        K = P_pred @ self.H.T @ np.linalg.inv(S)
+        innovation = x - self.H * x_pred
+        S = self.H * P_pred * self.H.T + self.R
+        K = P_pred * self.H.T * np.linalg.inv(S)
 
-        self.x = x_pred + K @ innovation
-        self.P = (np.eye(self.A.shape[1]) - K @ self.H) @ P_pred
+        self.x = x_pred + K * innovation
+        self.P = (np.eye(self.A.shape[1]) - K * self.H) * P_pred
 
         return self.x
 
@@ -91,7 +91,6 @@ class LQRController:
 
     def control(self):
         # Compute the control input using the LQR gain and the current state
-        print(self.z_goal - self.z_pos)
         return self.K * (self.z_goal - self.z_pos)
 
 def log_pos_callback(_, data, __):
@@ -114,13 +113,15 @@ def main(scf):
 
         Z_list = []
 
+        prev_vel = 0
+
         endtime = time.time() + 10
 
         while time.time() < endtime:
 
             # State Estimate
             raw_z = Z
-            z_pos = KalmanFilter().update(raw_z)
+            z_pos = KalmanFilter().update(raw_z, prev_vel) 
             print(f'current alt is: {z_pos}')
 
             # Path Plan (Tracking)
@@ -136,6 +137,8 @@ def main(scf):
             print("-------------")
 
             Z_list.append(Z)
+
+            prev_vel = float(actuation.z_vel)
 
             time.sleep(0.1)
 
