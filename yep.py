@@ -43,6 +43,32 @@ class PathPlanner:
         # t_val = self.look_ahead_radius / dist_to_next
         # self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
 
+class KalmanFilter():
+    '''filter the data from z-ranger'''
+    def __init__(self):
+        self.A = np.array([[0]])
+        self.B = np.array([[1]])
+        self.H = np.array([[1]])        # Observation matrix
+        self.Q = np.array([[0.01]])     # Process noise covariance
+        self.R = np.array([[0.0025]])   # Measurement noise covariance
+        self.P = np.array([[0.04]])     # Initial state covariance
+        self.z = 0                      # Initial state estimate
+
+    def update(self, x, u):
+        # Prediction step
+        x_pred = self.A @ self.x + self.B * u
+        P_pred = self.A @ self.P @ self.A.T + self.Q
+
+        # Update step
+        innovation = z - self.H @ x_pred
+        S = self.H @ P_pred @ self.H.T + self.R
+        K = P_pred @ self.H.T @ np.linalg.inv(S)
+
+        self.x = x_pred + K @ innovation
+        self.P = (np.eye(self.A.shape[1]) - K @ self.H) @ P_pred
+
+        return self.x
+
 class LQRController:
     '''controller class'''
     def __init__(self, z_pos, z_goal):
@@ -68,7 +94,6 @@ class LQRController:
         print(self.z_goal - self.z_pos)
         return self.K * (self.z_goal - self.z_pos)
 
-
 def log_pos_callback(_, data, __):
     '''fetch z pos'''
 
@@ -93,7 +118,8 @@ def main(scf):
 
         while time.time() < endtime:
 
-            z_pos = Z
+            raw_z = Z
+            z_pos = KalmanFilter().update(raw_z)
             print(f'current alt is: {z_pos}')
 
             z_goal = PathPlanner(z_pos).goal
