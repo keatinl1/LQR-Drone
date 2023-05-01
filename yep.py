@@ -38,9 +38,10 @@ class PathPlanner:
         dist = (self.waypoints - self.z_pos)**2
         i_closest_wp = np.argmin(dist)
         next_wp = self.waypoints[i_closest_wp + 1]
-        dist_to_next = np.sqrt(next_wp - self.z_pos)**2
-        t_val = self.look_ahead_radius / dist_to_next
-        self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
+        self.goal = next_wp
+        # dist_to_next = np.sqrt(next_wp - self.z_pos)**2
+        # t_val = self.look_ahead_radius / dist_to_next
+        # self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
 
 class LQRController:
     '''controller class'''
@@ -62,11 +63,10 @@ class LQRController:
 
         self.z_vel = self.control()
 
-
     def control(self):
         # Compute the control input using the LQR gain and the current state
         print(self.z_goal - self.z_pos)
-        return -self.K * (self.z_goal - self.z_pos)
+        return self.K * (self.z_goal - self.z_pos)
 
 
 def log_pos_callback(_, data, __):
@@ -87,6 +87,8 @@ def main(scf):
 
     with MotionCommander(scf, default_height=0.1) as mc:
 
+        Z_list = []
+
         endtime = time.time() + 10
 
         while time.time() < endtime:
@@ -104,11 +106,13 @@ def main(scf):
 
             print("-------------")
 
-            # write_to_csv(z_pos)
+            Z_list.append(Z)
 
             time.sleep(0.1)
 
         mc.stop
+
+    return Z_list
 
 if __name__ == '__main__':
 
@@ -125,6 +129,10 @@ if __name__ == '__main__':
 
         logconf.start()
 
-        main(scf)
+        output = main(scf)
 
         logconf.stop()
+
+        with open('file.csv', 'w', newline='') as myfile:
+            wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+            wr.writerow(output)
