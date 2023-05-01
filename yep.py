@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.ERROR)
 URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 DEFAULT_HEIGHT = 0.5
 
-class KalmanFilter():
+class KalmanFilter:
     '''filter the data from z-ranger'''
     def __init__(self):
         self.A = np.array([[0]])
