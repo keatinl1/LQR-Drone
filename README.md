@@ -1,3 +1,14 @@
 # LQR-Drone
+Linear Quadratic Regulators (LQR) are an optimal control strategy. 
 
-This repo is a work in progress...
+## Results achieved
+<p align="center">
+  <kbd>
+    <img src="https://raw.githubusercontent.com/keatinl1/LQR-Drone/main/plot_w_ref.png">
+  </kbd>
+</p>
+<p align="center">
+Figure 1: Control achieved
+</p>
+
+
