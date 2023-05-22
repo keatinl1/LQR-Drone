@@ -2,102 +2,26 @@
 import logging
 import time
 import csv
-from numpy import genfromtxt
-import numpy as np
-from scipy.linalg import solve_continuous_are
-
 import cflib.crtp
+
 from cflib.utils import uri_helper
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 
+from controller import LQRController
+from estimator import KalmanFilter
+from planner import PathPlanner
+
 logging.basicConfig(level=logging.ERROR)
 
 URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
 DEFAULT_HEIGHT = 0.5
 
-class KalmanFilter:
-    '''filter the data from z-ranger'''
-    def __init__(self):
-        self.A = np.array([[0]])
-        self.B = np.array([[1]])
-        self.H = np.array([[1]])        # Observation matrix
-        self.Q = np.array([[0.01]])     # Process noise covariance
-        self.R = np.array([[0.0025]])   # Measurement noise covariance
-        self.P = np.array([[0.04]])     # Initial state covariance
-        self.x = 0                      # Initial state estimate
-
-    def update(self, x, u):
-        # Prediction step
-        x_pred = self.A * self.x + self.B * u
-        P_pred = self.A * self.P * self.A.T + self.Q
-
-        # Update step
-        innovation = x - self.H * x_pred
-        S = self.H * P_pred * self.H.T + self.R
-        K = P_pred * self.H.T * np.linalg.inv(S)
-
-        self.x = x_pred + K * innovation
-        self.P = (np.eye(self.A.shape[1]) - K * self.H) * P_pred
-
-        return self.x
-
-class PathPlanner:
-    '''decide which height to aim for next'''
-    def __init__(self, z_pos):
-        self.z_pos = z_pos
-        self.look_ahead_radius = 0.05
-        self.waypoints = np.zeros([100])
-        self.goal = 0
-
-        self.get_waypoints()
-
-    def get_waypoints(self):
-        '''get waypoints from csv'''
-        self.waypoints = genfromtxt('ref-traj.csv', delimiter=',')
-        self.find_closest_next_waypoint()
-
-    def find_closest_next_waypoint(self):
-        '''find closest next waypoint from imported csv'''
-        dist = (self.waypoints - self.z_pos)**2
-        i_closest_wp = np.argmin(dist)
-        next_wp = self.waypoints[i_closest_wp + 1]
-        self.goal = next_wp
-        # dist_to_next = np.sqrt(next_wp - self.z_pos)**2
-        # t_val = self.look_ahead_radius / dist_to_next
-        # self.goal = (1 - t_val)*self.z_pos + t_val * next_wp
-
-class LQRController:
-    '''controller class'''
-    def __init__(self, z_pos, z_goal):
-        self.A = np.array([[0]])
-        self.B = np.array([[1]])
-        self.C = np.array([[1]])
-        self.D = np.array([[0]])
-
-        self.Q = np.diag([1])
-        self.R = np.array([[0.1]])
-
-        # Compute the LQR gain using the algebraic Riccati equation
-        S = solve_continuous_are(self.A, self.B, self.Q, self.R)
-        self.K = np.linalg.inv(self.R) @ self.B.T @ S
-
-        self.z_pos = z_pos
-        self.z_goal = z_goal
-
-        self.z_vel = self.control()
-
-    def control(self):
-        # Compute the control input using the LQR gain and the current state
-        return self.K * (self.z_goal - self.z_pos)
-
 def log_pos_callback(_, data, __):
     '''fetch z pos'''
-
     global Z
-
     Z = data['range.zrange'] / 1000 #  z ranger is in mm for some reason
 
 def write_to_csv(data):
@@ -115,7 +39,7 @@ def main(scf):
 
         prev_vel = 0
 
-        endtime = time.time() + 10
+        endtime = time.time() + 5
 
         while time.time() < endtime:
 
@@ -136,7 +60,7 @@ def main(scf):
 
             print("-------------")
 
-            Z_list.append(Z)
+            Z_list.append(z_pos)
 
             prev_vel = float(actuation.z_vel)
 
@@ -165,6 +89,6 @@ if __name__ == '__main__':
 
         logconf.stop()
 
-        with open('file.csv', 'w', newline='') as myfile:
+        with open('file.csv', 'a', newline='') as myfile:
             wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
             wr.writerow(output)
